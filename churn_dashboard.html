@@ -1,0 +1,77 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Customer churn dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f4f6f9;--panel:#fff;--ink:#16213a;--mute:#66728a;--line:#dde3ec;--churn:#d62839;--keep:#2a8c82;--bar:#e9edf3}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10172a;--panel:#18213a;--ink:#eaeefa;--mute:#98a4be;--line:#2a3555;--churn:#ff5c6c;--keep:#4fc4b8;--bar:#25304f}}
+:root[data-theme="dark"]{--bg:#10172a;--panel:#18213a;--ink:#eaeefa;--mute:#98a4be;--line:#2a3555;--churn:#ff5c6c;--keep:#4fc4b8;--bar:#25304f}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.5 "Public Sans",system-ui,sans-serif}
+main{max-width:1080px;margin:0 auto;padding:28px 18px 48px}
+h1{font-size:28px;font-weight:800;margin:0 0 4px;letter-spacing:-.02em}h2{font-size:16px;font-weight:600;margin:0 0 4px}
+.sub{color:var(--mute);margin:0 0 22px;max-width:62ch}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.kpi b{display:block;font-size:30px;font-weight:800;letter-spacing:-.02em}.kpi span{color:var(--mute);font-size:13px}
+.kpi.hot b{color:var(--churn)}
+.grid{display:grid;grid-template-columns:3fr 2fr;gap:12px}@media(max-width:800px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px 18px;margin-bottom:12px}
+.note{color:var(--mute);font-size:13px;margin:0 0 12px}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 14px}
+.tabs button{font:inherit;font-size:13px;padding:5px 12px;border:1px solid var(--line);background:none;color:var(--ink);border-radius:20px;cursor:pointer}
+.tabs button[aria-pressed=true]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+button:focus-visible{outline:2px solid var(--churn);outline-offset:2px}
+.row{display:grid;grid-template-columns:minmax(110px,170px) 1fr 54px;align-items:center;gap:10px;margin:8px 0;font-size:14px}
+.track{height:18px;background:var(--bar);border-radius:3px;position:relative;overflow:hidden}
+.fill{position:absolute;inset:0 auto 0 0;background:var(--churn);border-radius:3px}
+.row small{display:block;color:var(--mute);font-size:12px}.row .v{font-weight:600;text-align:right}
+.avg{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink)}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:7px 4px;text-align:right;border-bottom:1px solid var(--line)}th:first-child,td:first-child{text-align:left}th{font-weight:600;color:var(--mute);font-size:13px}
+.cm{display:grid;grid-template-columns:auto 1fr 1fr;gap:4px;font-size:13px;margin-top:14px;text-align:center}
+.cm div{padding:10px 4px;border-radius:4px}.cm .h{color:var(--mute);padding:4px}
+.tn,.tp{background:color-mix(in srgb,var(--keep) 22%,transparent)}.fp,.fn{background:color-mix(in srgb,var(--churn) 20%,transparent)}
+.cm b{display:block;font-size:20px}
+</style></head><body><main>
+<h1>Customer churn dashboard</h1>
+<p class="sub">Telecom customer base, 7,043 accounts. Churn rate by segment, the revenue that is leaving or about to, and the factors the model leans on.</p>
+<section class="kpis">
+<div class="kpi"><b>25.2%</b><span>Churn rate (1,774 of 7,043 customers)</span></div>
+<div class="kpi hot"><b>$113,297</b><span>Monthly revenue already lost</span></div>
+<div class="kpi hot"><b>$68,246</b><span>Monthly revenue at risk (1,041 active customers scored high risk)</span></div>
+<div class="kpi"><b>0.846</b><span>Best model ROC-AUC (Logistic Regression)</span></div>
+</section>
+<div class="grid"><div>
+<section class="panel"><h2>Churn rate by segment</h2>
+<p class="note">Black tick marks the overall rate of 25.2%.</p>
+<div class="tabs" id="tabs" role="group" aria-label="Segment"></div><div id="bars"></div></section>
+<section class="panel"><h2>Key churn drivers</h2>
+<p class="note">Random Forest feature importance, share of total.</p><div id="drivers"></div></section>
+</div><div>
+<section class="panel"><h2>Model comparison</h2>
+<p class="note">20% hold-out set, class weights balanced.</p>
+<table id="models"></table>
+<div class="cm" id="cm"></div>
+<p class="note" style="margin-top:12px">Confusion matrix for <span id="cmname"></span>. Recall matters most here: a missed churner (false negative) costs more than an unneeded retention offer.</p></section>
+</div></div>
+<script>
+const D={"customers": 7043, "churned": 1774, "churn_rate": 25.2, "monthly_revenue_lost": 113297.0, "revenue_at_risk": 68246.0, "high_risk_customers": 1041, "contract": [{"name": "Month-to-month", "customers": 3921, "rate": 40.2}, {"name": "One year", "customers": 1480, "rate": 10.8}, {"name": "Two year", "customers": 1642, "rate": 2.3}], "tenure": [{"name": "0-12 mo", "customers": 1723, "rate": 48.0}, {"name": "13-24 mo", "customers": 1496, "rate": 37.1}, {"name": "25-48 mo", "customers": 2112, "rate": 15.7}, {"name": "49-72 mo", "customers": 1712, "rate": 3.6}], "internet": [{"name": "DSL", "customers": 2328, "rate": 21.5}, {"name": "Fiber optic", "customers": 3083, "rate": 35.8}, {"name": "No", "customers": 1632, "rate": 10.4}], "payment": [{"name": "Bank transfer (automatic)", "customers": 1547, "rate": 23.3}, {"name": "Credit card (automatic)", "customers": 1430, "rate": 21.9}, {"name": "Electronic check", "customers": 2359, "rate": 30.5}, {"name": "Mailed check", "customers": 1707, "rate": 22.3}], "billing": [{"name": "Bank transfer / Paper", "customers": 629, "rate": 22.4}, {"name": "Bank transfer / Paperless", "customers": 918, "rate": 24.0}, {"name": "Credit card / Paper", "customers": 557, "rate": 18.9}, {"name": "Credit card / Paperless", "customers": 873, "rate": 23.8}, {"name": "Electronic check / Paper", "customers": 910, "rate": 27.8}, {"name": "Electronic check / Paperless", "customers": 1449, "rate": 32.2}, {"name": "Mailed check / Paper", "customers": 700, "rate": 20.0}, {"name": "Mailed check / Paperless", "customers": 1007, "rate": 23.8}], "drivers": [{"name": "tenure", "value": 26.6}, {"name": "TotalCharges", "value": 16.4}, {"name": "Contract_Two year", "value": 15.2}, {"name": "avg_monthly_spend", "value": 7.1}, {"name": "MonthlyCharges", "value": 6.7}, {"name": "Contract_One year", "value": 5.0}, {"name": "InternetService_Fiber optic", "value": 3.3}, {"name": "charge_to_avg_ratio", "value": 2.9}, {"name": "StreamingTV_No internet service", "value": 2.3}, {"name": "InternetService_No", "value": 1.9}], "models": {"Logistic Regression": {"accuracy": 0.7487579843860894, "precision": 0.5008403361344538, "recall": 0.8394366197183099, "f1": 0.6273684210526316, "roc_auc": 0.8456263195873533, "confusion": {"tn": 757, "fp": 297, "fn": 57, "tp": 298}}, "Random Forest": {"accuracy": 0.7551454932576295, "precision": 0.5090252707581228, "recall": 0.7943661971830986, "f1": 0.6204620462046204, "roc_auc": 0.8386428628698186, "confusion": {"tn": 782, "fp": 272, "fn": 73, "tp": 282}}}, "best_model": "Logistic Regression"};
+const segs={Contract:D.contract,Tenure:D.tenure,Internet:D.internet,Payment:D.payment,Billing:D.billing};
+const $=id=>document.getElementById(id);
+function bars(k){const rows=segs[k],max=Math.max(...rows.map(r=>r.rate),D.churn_rate)*1.1;
+ $('bars').innerHTML=rows.map(r=>`<div class="row"><div>${r.name}<small>${r.customers.toLocaleString()} customers</small></div>
+ <div class="track"><div class="fill" style="width:${r.rate/max*100}%"></div><div class="avg" style="left:${D.churn_rate/max*100}%"></div></div><div class="v">${r.rate}%</div></div>`).join('');
+ document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-pressed',b.textContent===k));}
+$('tabs').innerHTML=Object.keys(segs).map(k=>`<button>${k}</button>`).join('');
+$('tabs').onclick=e=>{if(e.target.tagName==='BUTTON')bars(e.target.textContent)};bars('Contract');
+const dm=Math.max(...D.drivers.map(x=>x.value));
+$('drivers').innerHTML=D.drivers.slice(0,8).map(x=>`<div class="row"><div>${x.name.replace(/_/g,' ')}</div><div class="track"><div class="fill" style="width:${x.value/dm*100}%;background:var(--ink)"></div></div><div class="v">${x.value}%</div></div>`).join('');
+const m=D.models,f=v=>(v*100).toFixed(1)+'%';
+$('models').innerHTML='<tr><th></th>'+Object.keys(m).map(k=>`<th>${k}</th>`).join('')+'</tr>'+
+ ['accuracy','precision','recall','f1','roc_auc'].map(q=>`<tr><td>${q.replace('_',' ')}</td>`+Object.keys(m).map(k=>`<td>${q==='roc_auc'?m[k][q].toFixed(3):f(m[k][q])}</td>`).join('')+'</tr>').join('');
+const c=m[D.best_model].confusion;$('cmname').textContent=D.best_model;
+$('cm').innerHTML=`<div class="h"></div><div class="h">Predicted stay</div><div class="h">Predicted churn</div>
+<div class="h">Actual stay</div><div class="tn"><b>${c.tn}</b>true negative</div><div class="fp"><b>${c.fp}</b>false positive</div>
+<div class="h">Actual churn</div><div class="fn"><b>${c.fn}</b>false negative</div><div class="tp"><b>${c.tp}</b>true positive</div>`;
+</script></main></body></html>
